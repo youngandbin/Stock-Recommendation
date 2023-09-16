@@ -32,6 +32,11 @@ class TGN(torch.nn.Module):
     self.logger = logging.getLogger(__name__)
 
     self.node_raw_features = torch.from_numpy(node_features.astype(np.float32)).to(device)
+    # edge_features를 normalized 해준다
+    edge_features = edge_features.astype(np.float32)
+    edge_features -= edge_features.mean(axis=0)
+    edge_features /= edge_features.std(axis=0)
+    
     self.edge_raw_features = torch.from_numpy(edge_features.astype(np.float32)).to(device)
 
     self.n_node_features = self.node_raw_features.shape[1]

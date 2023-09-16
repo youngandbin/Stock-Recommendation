@@ -20,8 +20,7 @@ np.random.seed(0)
 
 ### Argument and global variables
 parser = argparse.ArgumentParser('TGN self-supervised training')
-parser.add_argument('-d', '--data', type=str, help='Dataset name (eg. wikipedia or reddit)',
-                    default='wikipedia')
+parser.add_argument('-d', '--data', type=str, help='Dataset name (eg. wikipedia or reddit)', default='wikipedia')
 parser.add_argument('--bs', type=int, default=200, help='Batch_size')
 parser.add_argument('--prefix', type=str, default='', help='Prefix to name the checkpoints')
 parser.add_argument('--n_degree', type=int, default=10, help='Number of neighbors to sample')
@@ -35,8 +34,7 @@ parser.add_argument('--drop_out', type=float, default=0.1, help='Dropout probabi
 parser.add_argument('--gpu', type=int, default=1, help='Idx for the gpu to use')
 parser.add_argument('--node_dim', type=int, default=100, help='Dimensions of the node embedding')
 parser.add_argument('--time_dim', type=int, default=100, help='Dimensions of the time embedding')
-parser.add_argument('--backprop_every', type=int, default=1, help='Every how many batches to '
-                                                                  'backprop')
+parser.add_argument('--backprop_every', type=int, default=1, help='Every how many batches to backprop')
 parser.add_argument('--use_memory', action='store_true',
                     help='Whether to augment the model with a node memory')
 parser.add_argument('--embedding_module', type=str, default="graph_attention", choices=[
@@ -115,6 +113,7 @@ full_data, train_data, val_data, test_data, \
 new_node_val_data, new_node_test_data = get_data(DATA,
                                                   different_new_nodes_between_val_and_test=args.different_new_nodes, 
                                                   randomize_features=args.randomize_features)
+
 ### get the final_time_feature.pkl dictionary # ts별로 모든 주식의 과거 일별 가격 모아 둔 딕셔너리
 time_feature = pickle.load(open('data/final_time_feature.pkl', 'rb'))
 
@@ -128,10 +127,10 @@ full_ngh_finder = get_neighbor_finder(full_data, args.uniform)
 # NB: in the inductive setting, negatives are sampled only amongst other new nodes
 
 # train_rand_sampler = RandEdgeSampler(train_data.sources, train_data.destinations) # src_list, dst_list, portfolio_list, idx_list
-val_rand_sampler = RandEdgeSampler(full_data.sources, full_data.destinations, full_data.portfolios, full_data.edge_idxs, seed=0)
-nn_val_rand_sampler = RandEdgeSampler(new_node_val_data.sources, new_node_val_data.destinations, new_node_val_data.portfolios, new_node_val_data.edge_idxs, seed=1)
-test_rand_sampler = RandEdgeSampler(full_data.sources, full_data.destinations, full_data.portfolios, full_data.edge_idxs, seed=2)
-nn_test_rand_sampler = RandEdgeSampler(new_node_test_data.sources, new_node_test_data.destinations, new_node_test_data.portfolios, new_node_test_data.edge_idxs, seed=3)
+# val_rand_sampler = RandEdgeSampler(full_data.sources, full_data.destinations, full_data.portfolios, full_data.edge_idxs, seed=0)
+# nn_val_rand_sampler = RandEdgeSampler(new_node_val_data.sources, new_node_val_data.destinations, new_node_val_data.portfolios, new_node_val_data.edge_idxs, seed=1)
+# test_rand_sampler = RandEdgeSampler(full_data.sources, full_data.destinations, full_data.portfolios, full_data.edge_idxs, seed=2)
+# nn_test_rand_sampler = RandEdgeSampler(new_node_test_data.sources, new_node_test_data.destinations, new_node_test_data.portfolios, new_node_test_data.edge_idxs, seed=3)
 
 # Set device
 device_string = 'cuda:{}'.format(GPU) if torch.cuda.is_available() else 'cpu'
@@ -162,7 +161,6 @@ for i in range(args.n_runs):
             use_destination_embedding_in_message=args.use_destination_embedding_in_message,
             use_source_embedding_in_message=args.use_source_embedding_in_message,
             dyrep=args.dyrep)
-  # criterion = torch.nn.BCELoss()
   optimizer = torch.optim.Adam(tgn.parameters(), lr=LEARNING_RATE)
   tgn = tgn.to(device)
 
@@ -180,6 +178,7 @@ for i in range(args.n_runs):
   train_losses = []
 
   early_stopper = EarlyStopMonitor(max_round=args.patience)
+
   for epoch in range(NUM_EPOCH):
     start_epoch = time.time()
 
@@ -210,8 +209,7 @@ for i in range(args.n_runs):
         start_idx = batch_idx * BATCH_SIZE
         end_idx = min(num_instance, start_idx + BATCH_SIZE)
         
-        # <class 'numpy.ndarray'> (BATCH_SIZE,)
-        sources_batch = train_data.sources[start_idx:end_idx] 
+        sources_batch = train_data.sources[start_idx:end_idx] # <class 'numpy.ndarray'> (BATCH_SIZE,)
         destinations_batch = train_data.destinations[start_idx:end_idx]
         edge_idxs_batch = train_data.edge_idxs[start_idx: end_idx]
         timestamps_batch = train_data.timestamps[start_idx:end_idx]
@@ -245,8 +243,11 @@ for i in range(args.n_runs):
             try:
               Sigma_inv = np.linalg.inv(Sigma)
             except:
-              print('Sigma is not invertible')
+              print('Sigma is not invertible!')
+              print('new_portfolio_time_feature')
               print(new_portfolio_time_feature)
+              print('Sigma')
+              print(Sigma)
             max_sharpe = np.sqrt(np.dot(mu, Sigma_inv).dot(mu.T))
             sharpes[neg_index] = max_sharpe
          
@@ -265,29 +266,19 @@ for i in range(args.n_runs):
         edge_idxs_batch_duplicated = [x for x in edge_idxs_batch for _ in range(size-1)]
         potential_neg_batch_duplicated = [x for y in negative_batch_final for x in y]
 
+        ########### 6. BPR용 데이터 + CL용 데이터
         # <class 'numpy.ndarray'> (200,)
-        sources_batch = np.array(sources_batch_duplicated)# + sources_batch_duplicated) 
-        destinations_batch = np.array(destinations_batch_duplicated)# + potential_pos_batch_duplicated)
-        negatives_batch = np.array(potential_neg_batch_duplicated)# + potential_neg_batch_duplicated)
-        timestamps_batch = np.array(timestamps_batch_duplicated)# + timestamps_batch_duplicated)
-        edge_idxs_batch = np.array(edge_idxs_batch_duplicated)# + edge_idxs_batch_duplicated)
+        sources_batch = np.array(sources_batch_duplicated + sources_batch_duplicated) 
+        destinations_batch = np.array(destinations_batch_duplicated + potential_pos_batch_duplicated)
+        negatives_batch = np.array(potential_neg_batch_duplicated + potential_neg_batch_duplicated)
+        timestamps_batch = np.array(timestamps_batch_duplicated + timestamps_batch_duplicated)
+        edge_idxs_batch = np.array(edge_idxs_batch_duplicated + edge_idxs_batch_duplicated)
 
-        
-
-        # with torch.no_grad():
-        #   pos_label = torch.ones(size, dtype=torch.float, device=device)
-        #   neg_label = torch.zeros(size, dtype=torch.float, device=device)
-
+        """
+        emb 계산
+        """
         tgn = tgn.train()
-        # pos_prob, neg_prob = tgn.compute_edge_probabilities(sources_batch, 
-        #                                                     destinations_batch, 
-        #                                                     negatives_batch,
-        #                                                     timestamps_batch, 
-        #                                                     edge_idxs_batch, 
-        #                                                     NUM_NEIGHBORS)
-        
-
-        # emb 계산
+        # # torch.Size([800, 31]) # 800개 = BPR용 데이터 + CL용 데이터
         source_embedding, destination_embedding, negative_embedding = tgn.compute_temporal_embeddings(sources_batch,
                                                                                                     destinations_batch,
                                                                                                     negatives_batch,
@@ -295,18 +286,33 @@ for i in range(args.n_runs):
                                                                                                     edge_idxs_batch,
                                                                                                     NUM_NEIGHBORS)
         
-        # 
-        print('-------------------Embedding done-----------------------')
-        print('source_embedding', source_embedding.shape) # torch.Size([400, 31])
-        print('destination_embedding', destination_embedding.shape) # torch.Size([400, 31])
-        print('negative_embedding', negative_embedding.shape) # torch.Size([400, 31])
         
-        # BPR loss 계산
-        pos_scores = torch.sum(source_embedding * destination_embedding, dim=1)
-        neg_scores = torch.sum(source_embedding * negative_embedding, dim=1)
+        """
+        loss 계산
+        """
+
+        # get the first half
+        source_embedding_BPR = source_embedding[:int(source_embedding.shape[0]/2)]
+        destination_embedding_BPR = destination_embedding[:int(destination_embedding.shape[0]/2)]
+        negative_embedding_BPR = negative_embedding[:int(negative_embedding.shape[0]/2)]
+
+        pos_scores = torch.sum(source_embedding_BPR * destination_embedding_BPR, dim=1)
+        neg_scores = torch.sum(source_embedding_BPR * negative_embedding_BPR, dim=1)
         bpr_loss = -torch.mean(torch.log(torch.sigmoid(pos_scores - neg_scores)))
-        # loss += criterion(pos_prob.squeeze(), pos_label) + criterion(neg_prob.squeeze(), neg_label)
+
+        # get the second half
+        source_embedding_CL = source_embedding[int(source_embedding.shape[0]/2):]
+        destination_embedding_CL = destination_embedding[int(destination_embedding.shape[0]/2):]
+        negative_embedding_CL = negative_embedding[int(negative_embedding.shape[0]/2):]     
+        tau = 0.1
+        pos_scores = torch.sum(torch.exp(source_embedding_CL * destination_embedding_CL)/tau, dim=1)
+        neg_scores = torch.sum(torch.exp(source_embedding_CL * negative_embedding_CL)/tau, dim=1)
+       
+        cl_loss = -torch.mean(torch.log(torch.sigmoid(pos_scores - neg_scores)))
+        cl_loss = 0
+
         loss += bpr_loss
+        loss += cl_loss
         
       loss /= args.backprop_every
 
@@ -334,15 +340,11 @@ for i in range(args.n_runs):
       # validation on unseen nodes
       train_memory_backup = tgn.memory.backup_memory()
 
-    # val_ap, val_auc = eval_edge_prediction(model=tgn,
-    #                                         negative_edge_sampler=val_rand_sampler,
-    #                                         data=val_data,
-    #                                         n_neighbors=NUM_NEIGHBORS)
-    val_ap, val_auc = eval_recommendation(tgn=tgn,
-                                            negative_edge_sampler=val_rand_sampler, 
-                                            data=val_data, 
-                                            batch_size=BATCH_SIZE,
-                                            n_neighbors=NUM_NEIGHBORS)
+
+    val_ap, val_auc, val_SR, val_New_SR, val_returns, val_New_returns = eval_recommendation(tgn=tgn,
+                                                                                            data=val_data, 
+                                                                                            batch_size=BATCH_SIZE,
+                                                                                            n_neighbors=NUM_NEIGHBORS)
 
     if USE_MEMORY:
       val_memory_backup = tgn.memory.backup_memory()
@@ -352,15 +354,10 @@ for i in range(args.n_runs):
       tgn.memory.restore_memory(train_memory_backup)
 
     # Validate on unseen nodes
-    # nn_val_ap, nn_val_auc = eval_edge_prediction(model=tgn,
-    #                                               negative_edge_sampler=val_rand_sampler,
-    #                                               data=new_node_val_data,
-    #                                               n_neighbors=NUM_NEIGHBORS)
-    nn_val_ap, nn_val_auc = eval_recommendation(tgn,
-                                                  nn_val_rand_sampler,
-                                                  new_node_val_data, 
-                                                  BATCH_SIZE,
-                                                  n_neighbors=NUM_NEIGHBORS)
+    nn_val_ap, nn_val_auc, nn_val_SR, nn_val_New_SR, nn_val_returns, nn_val_New_returns = eval_recommendation(tgn,
+                                                                                                              new_node_val_data, 
+                                                                                                              BATCH_SIZE,
+                                                                                                              n_neighbors=NUM_NEIGHBORS)
 
     if USE_MEMORY:
       # Restore memory we had at the end of validation
@@ -388,9 +385,18 @@ for i in range(args.n_runs):
       'val auc: {}, new node val auc: {}'.format(val_auc, nn_val_auc))
     logger.info(
       'val ap: {}, new node val ap: {}'.format(val_ap, nn_val_ap))
+    logger.info(
+      'val SR: {}, new node val SR: {}'.format(val_SR, nn_val_SR))
+    logger.info(
+      'val New SR: {}, new node val New SR: {}'.format(val_New_SR, nn_val_New_SR))
+    logger.info(
+      'val returns: {}, new node val returns: {}'.format(val_returns, nn_val_returns))
+    logger.info(
+      'val New returns: {}, new node val New returns: {}'.format(val_New_returns, nn_val_New_returns))
+    
 
     # Early stopping
-    if early_stopper.early_stop_check(val_ap):
+    if early_stopper.early_stop_check(np.mean(val_ap)):
       logger.info('No improvement over {} epochs, stop training'.format(early_stopper.max_round))
       logger.info(f'Loading the best model at epoch {early_stopper.best_epoch}')
       best_model_path = get_checkpoint_path(early_stopper.best_epoch)
@@ -407,36 +413,50 @@ for i in range(args.n_runs):
   if USE_MEMORY:
     val_memory_backup = tgn.memory.backup_memory()
 
-  ### Test
+  """
+  Test
+  """
   tgn.embedding_module.neighbor_finder = full_ngh_finder
-  # test_ap, test_auc = eval_edge_prediction(model=tgn,
-  #                                           negative_edge_sampler=test_rand_sampler,
-  #                                           data=test_data,
-  #                                           n_neighbors=NUM_NEIGHBORS)
-  test_ap, test_auc = eval_recommendation(tgn,
-                                              test_rand_sampler,
-                                              test_data, 
-                                              BATCH_SIZE,
-                                              n_neighbors=NUM_NEIGHBORS)
+  test_ap, test_auc, test_SR, test_New_SR, test_returns, test_New_returns = eval_recommendation(tgn,
+                                                                                                test_data, 
+                                                                                                BATCH_SIZE,
+                                                                                                n_neighbors=NUM_NEIGHBORS)
 
   if USE_MEMORY:
     tgn.memory.restore_memory(val_memory_backup)
 
   # Test on unseen nodes
-  # nn_test_ap, nn_test_auc = eval_edge_prediction(model=tgn,
-  #                                                 negative_edge_sampler=nn_test_rand_sampler,
-  #                                                 data=new_node_test_data,
-  #                                                 n_neighbors=NUM_NEIGHBORS)
-  nn_test_ap, nn_test_auc  = eval_recommendation(tgn,
-                                                nn_test_rand_sampler,
-                                                new_node_test_data, 
-                                                BATCH_SIZE,
-                                                n_neighbors=NUM_NEIGHBORS)
+  nn_test_ap, nn_test_auc, nn_test_SR, nn_test_New_SR, nn_test_returns, nn_test_New_returns  = eval_recommendation(tgn,
+                                                                                                                  new_node_test_data, 
+                                                                                                                  BATCH_SIZE,
+                                                                                                                  n_neighbors=NUM_NEIGHBORS)
 
   logger.info(
     'Test statistics: Old nodes -- ap: {}'.format(test_ap))
   logger.info(
     'Test statistics: New nodes -- ap: {}'.format(nn_test_ap))
+  logger.info(
+    'Test statistics: Old nodes -- auc: {}'.format(test_auc))
+  logger.info(
+    'Test statistics: New nodes -- auc: {}'.format(nn_test_auc))
+  logger.info(
+    'Test statistics: Old nodes -- SR: {}'.format(test_SR))
+  logger.info(
+    'Test statistics: New nodes -- SR: {}'.format(nn_test_SR))
+  logger.info(
+    'Test statistics: Old nodes -- New_SR: {}'.format(test_New_SR))
+  logger.info(
+    'Test statistics: New nodes -- New_SR: {}'.format(nn_test_New_SR))
+  logger.info(
+    'Test statistics: Old nodes -- returns: {}'.format(test_returns))
+  logger.info(
+    'Test statistics: New nodes -- returns: {}'.format(nn_test_returns))
+  logger.info(
+    'Test statistics: Old nodes -- New_returns: {}'.format(test_New_returns))
+  logger.info(
+    'Test statistics: New nodes -- New_returns: {}'.format(nn_test_New_returns))
+  
+
   # Save results for this run
   pickle.dump({
     "val_aps": val_aps,
